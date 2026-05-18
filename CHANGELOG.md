@@ -1,6 +1,12 @@
+##9.1.0
+
+Add cleanup method that allows calling code to signal it is done with a connection object.
+
+Fix startScan and getScanStatus methods (thanks @atj!)
+
 ##9.0.1
 
-DO some more moving stuff around and removing unnecessary code from the async impl. Given that
+Do some more moving stuff around and removing unnecessary code from the async impl. Given that
 we are already doing string replacement hax, what are a few more if it keeps the async impl a
 little cleaner. It's no more gross than function coloring anyways.
 
