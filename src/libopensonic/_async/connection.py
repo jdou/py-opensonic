@@ -199,6 +199,14 @@ class AsyncConnection:
         self._use_get = g
     use_get = property(lambda s: s._use_get, set_get)
 
+
+    async def cleanup(self) -> None:
+        """ Cleanup the connection by closing the underlying session. """
+        if self._sess is not None:
+            await self._sess.close()
+            self._sess = None
+
+
     # API methods
     async def add_chat_message(self, message:str) -> bool:
         """
