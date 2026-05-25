@@ -1,3 +1,7 @@
+##9.2.0
+
+Add possiblity to add range requests to stream method.
+
 ##9.1.0
 
 Add cleanup method that allows calling code to signal it is done with a connection object.
