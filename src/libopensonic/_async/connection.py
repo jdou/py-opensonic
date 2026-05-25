@@ -2070,7 +2070,7 @@ class AsyncConnection:
 
     async def stream(self, sid:str, max_bit_rate:int=0, tformat:str|None=None,
                time_offset:int|None=None, size:str|None=None,
-               estimate_length:bool=False, converted:bool=False) -> ClientResponse:
+               estimate_length:bool=False, converted:bool=False, byte_range:str|None=None) -> ClientResponse:
         """
         since: 1.0.0
 
@@ -2103,6 +2103,8 @@ class AsyncConnection:
                         the video in question, then setting this parameter
                         to "true" will cause the converted video to be
                         returned instead of the original.
+        byte_range:str  The requested byte range to stream will be passed
+                        in the HTTP Range header.
 
         Returns the file-like object for reading or raises an exception
         on error
@@ -2112,7 +2114,11 @@ class AsyncConnection:
             'estimateContentLength': estimate_length,
             'converted': converted})
 
-        res = await self._do_request('stream', q)
+        headers = None
+        if byte_range:
+            headers = {'Range': byte_range}
+
+        res = await self._do_request('stream', q, headers=headers)
         dres = await self._handle_bin_res(res)
         if isinstance(dres, dict):
             self._check_status(dres)
@@ -2424,7 +2430,7 @@ class AsyncConnection:
         return salt[:length]
 
 
-    async def _do_request(self, method: str, query: dict | None = None) -> ClientResponse:
+    async def _do_request(self, method: str, query: dict | None = None, headers: dict | None = None) -> ClientResponse:
         qdict = self._get_base_qdict()
         if query is not None:
             qdict.update(query)
@@ -2442,12 +2448,12 @@ class AsyncConnection:
             self._sess = aiohttp.ClientSession()
 
         if self._use_get:
-            return await self._sess.get(url, params=qdict, timeout=self._timeout, **req_kwargs)
-        return await self._sess.post(url, data=qdict, timeout=self._timeout, **req_kwargs)
+            return await self._sess.get(url, params=qdict, timeout=self._timeout, headers=headers, **req_kwargs)
+        return await self._sess.post(url, data=qdict, timeout=self._timeout, headers=headers,**req_kwargs)
 
 
     async def _do_request_with_list(self, method:str, list_name:str, alist:list,
-                           query:dict|None=None) -> ClientResponse:
+                           query:dict|None=None, headers:dict|None=None) -> ClientResponse:
         """
         Like _getRequest, but allows appending a number of items with the
         same key (listName).  This bypasses the limitation of urlencode()
@@ -2465,11 +2471,11 @@ class AsyncConnection:
             self._sess = aiohttp.ClientSession()
 
         if self._use_get:
-            return await self._sess.get(url, params=qdict, timeout=self._timeout)
-        return await self._sess.post(url, data=qdict, timeout=self._timeout)
+            return await self._sess.get(url, params=qdict, timeout=self._timeout, headers=headers)
+        return await self._sess.post(url, data=qdict, timeout=self._timeout, headers=headers)
 
 
-    async def _do_request_with_lists(self, method:str, list_map:dict, query:dict|None=None) -> ClientResponse:
+    async def _do_request_with_lists(self, method:str, list_map:dict, query:dict|None=None, headers:dict|None=None) -> ClientResponse:
         """
         Like _getRequestWithList(), but you must pass a dictionary
         that maps the listName to the list.  This allows for multiple
@@ -2493,8 +2499,8 @@ class AsyncConnection:
             self._sess = aiohttp.ClientSession()
 
         if self._use_get:
-            return await self._sess.get(url, params=qdict, timeout=self._timeout)
-        return await self._sess.post(url, data=qdict, timeout=self._timeout)
+            return await self._sess.get(url, params=qdict, timeout=self._timeout, headers=headers)
+        return await self._sess.post(url, data=qdict, timeout=self._timeout, headers=headers)
 
 
     async def _handle_info_res(self, res: ClientResponse) -> dict:

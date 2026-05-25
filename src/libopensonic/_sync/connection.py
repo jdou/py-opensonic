@@ -2070,7 +2070,7 @@ class Connection:
 
     def stream(self, sid:str, max_bit_rate:int=0, tformat:str|None=None,
                time_offset:int|None=None, size:str|None=None,
-               estimate_length:bool=False, converted:bool=False) -> Response:
+               estimate_length:bool=False, converted:bool=False, byte_range:str|None=None) -> Response:
         """
         since: 1.0.0
 
@@ -2103,6 +2103,8 @@ class Connection:
                         the video in question, then setting this parameter
                         to "true" will cause the converted video to be
                         returned instead of the original.
+        byte_range:str  The requested byte range to stream will be passed
+                        in the HTTP Range header.
 
         Returns the file-like object for reading or raises an exception
         on error
@@ -2112,7 +2114,11 @@ class Connection:
             'estimateContentLength': estimate_length,
             'converted': converted})
 
-        res = self._do_request('stream', q, is_stream=True)
+        headers = None
+        if byte_range:
+            headers = {'Range': byte_range}
+
+        res = self._do_request('stream', q, headers=headers)
         dres = self._handle_bin_res(res)
         if isinstance(dres, dict):
             self._check_status(dres)
@@ -2424,7 +2430,7 @@ class Connection:
         return salt[:length]
 
 
-    def _do_request(self, method: str, query: dict | None = None, is_stream: bool = False) -> Response:
+    def _do_request(self, method: str, query: dict | None = None, headers: dict | None = None) -> Response:
         qdict = self._get_base_qdict()
         if query is not None:
             qdict.update(query)
@@ -2442,12 +2448,12 @@ class Connection:
             self._sess = requests.Session()
 
         if self._use_get:
-            return self._sess.get(url, params=qdict, timeout=self._timeout, stream=is_stream)
-        return self._sess.post(url, data=qdict, timeout=self._timeout, stream=is_stream)
+            return self._sess.get(url, params=qdict, timeout=self._timeout, headers=headers, stream=is_stream)
+        return self._sess.post(url, data=qdict, timeout=self._timeout, headers=headers,**req_kwargs)
 
 
     def _do_request_with_list(self, method:str, list_name:str, alist:list,
-                           query:dict|None=None) -> Response:
+                           query:dict|None=None, headers:dict|None=None) -> Response:
         """
         Like _getRequest, but allows appending a number of items with the
         same key (listName).  This bypasses the limitation of urlencode()
@@ -2465,11 +2471,11 @@ class Connection:
             self._sess = requests.Session()
 
         if self._use_get:
-            return self._sess.get(url, params=qdict, timeout=self._timeout)
-        return self._sess.post(url, data=qdict, timeout=self._timeout)
+            return self._sess.get(url, params=qdict, timeout=self._timeout, headers=headers)
+        return self._sess.post(url, data=qdict, timeout=self._timeout, headers=headers)
 
 
-    def _do_request_with_lists(self, method:str, list_map:dict, query:dict|None=None) -> Response:
+    def _do_request_with_lists(self, method:str, list_map:dict, query:dict|None=None, headers:dict|None=None) -> Response:
         """
         Like _getRequestWithList(), but you must pass a dictionary
         that maps the listName to the list.  This allows for multiple
@@ -2493,8 +2499,8 @@ class Connection:
             self._sess = requests.Session()
 
         if self._use_get:
-            return self._sess.get(url, params=qdict, timeout=self._timeout)
-        return self._sess.post(url, data=qdict, timeout=self._timeout)
+            return self._sess.get(url, params=qdict, timeout=self._timeout, headers=headers)
+        return self._sess.post(url, data=qdict, timeout=self._timeout, headers=headers)
 
 
     def _handle_info_res(self, res: Response) -> dict:

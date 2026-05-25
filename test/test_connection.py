@@ -1372,6 +1372,28 @@ class TestDownloadStream:
         result = await conn.stream("song-123", max_bit_rate=320)
         assert result is mock_binary_response
 
+    @pytest.mark.asyncio
+    async def test_stream_with_range(self, conn, mock_session, mock_binary_response):
+        """Test stream sends Range header when range parameter is provided."""
+        mock_session.get = AsyncMock(return_value=mock_binary_response)
+        conn.use_get = True
+
+        await conn.stream("song-123", byte_range="bytes=0-1023")
+
+        call_args = mock_session.get.call_args
+        assert call_args.kwargs.get("headers") == {"Range": "bytes=0-1023"}
+
+    @pytest.mark.asyncio
+    async def test_stream_without_range(self, conn, mock_session, mock_binary_response):
+        """Test stream sends no Range header when range parameter is omitted."""
+        mock_session.get = AsyncMock(return_value=mock_binary_response)
+        conn.use_get = True
+
+        await conn.stream("song-123")
+
+        call_args = mock_session.get.call_args
+        assert call_args.kwargs.get("headers") is None
+
 # ============================================================================
 # JUKEBOX METHODS
 # ============================================================================
