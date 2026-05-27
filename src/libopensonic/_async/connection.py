@@ -23,7 +23,7 @@ import aiohttp
 from aiohttp import ClientResponse
 
 from .. import errors
-from ..media.media_types import (Album, AlbumID3, AlbumInfo, ArtistID3, ArtistInfo, ArtistInfo2,
+from ..media.media_types import (Album, AlbumID3, AlbumID3WithSongs, AlbumInfo, ArtistID3, ArtistInfo, ArtistInfo2,
                                 Artists, Bookmark, ChatMessage, Child, Directory, Error, Genre,
                                 Indexes, InternetRadioStation, JukeboxPlaylist, JukeboxStatus,
                                 Lyrics, MusicFolder, NowPlayingEntry, OpenSubsonicExtension,
@@ -705,7 +705,7 @@ class AsyncConnection:
         return True
 
 
-    async def get_album(self, album_id:str) -> AlbumID3:
+    async def get_album(self, album_id:str) -> AlbumID3WithSongs:
         """Return the info and songs for an album using ID3 tags.
 
         Since: 1.8.0
@@ -715,7 +715,7 @@ class AsyncConnection:
             album_id: The album ID.
 
         Returns:
-            A media.AlbumID3 object.
+            A media.AlbumID3WithSongs object.
 
         Raises:
             errors.SonicError: On failure.
@@ -727,7 +727,7 @@ class AsyncConnection:
         res = await self._do_request(method, q)
         dres = await self._handle_info_res(res)
         self._check_status(dres)
-        return AlbumID3.from_dict(dres['album'])
+        return AlbumID3WithSongs.from_dict(dres['album'])
 
 
     async def get_album_info(self, aid:str) -> AlbumInfo:

@@ -52,7 +52,7 @@ class AlbumID3(DataItem):
     genre: str | None = None
     played: str | None = None
     user_rating: Annotated[int | None, Alias("userRating")] = None
-    record_labels: Annotated[list[RecordLabel] | None, Alias("recordLabel")] = None
+    record_labels: Annotated[list[RecordLabel] | None, Alias("recordLabels")] = None
     music_brainz_id: Annotated[str | None, Alias("musicBrainzId")] = None
     genres: list[ItemGenre] | None = None
     artists: list[ArtistID3] | None = None
@@ -65,6 +65,13 @@ class AlbumID3(DataItem):
     is_compilation: Annotated[bool | None, Alias("isCompilation")] = None
     explicit_status: Annotated[str | None, Alias("explicitStatus")] = None
     disc_titles: Annotated[list[DiscTitle] | None, Alias("discTitles")] = None
+
+
+@dataclass(kw_only=True)
+class AlbumID3WithSongs(AlbumID3):
+    """
+    https://opensubsonic.netlify.app/docs/responses/albumid3withsongs/
+    """
     song: list[Child] | None = None
 
 
@@ -111,9 +118,9 @@ class ArtistID3(DataItem):
 class Artist(ArtistID3):
     """
     https://opensubsonic.netlify.app/docs/responses/artist/
-    
-    While the spec has this object, it has the same required memebers as ArtistID3.
     """
+    user_rating: Annotated[int | None, Alias("userRating")] = None
+    average_rating: Annotated[float | None, Alias("averageRating")] = None
 
 
 @dataclass(kw_only=True)
@@ -141,7 +148,7 @@ class ArtistInfo2(DataItem):
     small_image_url: Annotated[str | None, Alias("smallImageUrl")] = None
     medium_image_url: Annotated[str | None, Alias("mediumImageUrl")] = None
     large_image_url: Annotated[str | None, Alias("largeImageUrl")] = None
-    similar_artist: Annotated[list[ArtistID3] | None, Alias("similarAritst")] = None
+    similar_artist: Annotated[list[ArtistID3] | None, Alias("similarArtist")] = None
 
 
 @dataclass(kw_only=True)
@@ -152,7 +159,7 @@ class Artists(DataItem):
     ignored_articles: Annotated[str, Alias("ignoredArticles")]
     shortcut: list[Artist] | None = None
     child: list[Child] | None = None
-    index: list[Index] | None = None
+    index: list[IndexID3] | None = None
 
 
 @dataclass(kw_only=True)
@@ -176,6 +183,25 @@ class ChatMessage(DataItem):
     username: str
     time: int
     message: str
+
+
+@dataclass(kw_only=True)
+class Movement(DataItem):
+    """
+    https://opensubsonic.netlify.app/docs/responses/movement/
+    """
+    name: str
+    number: int | None = None
+    count: int | None = None
+
+
+@dataclass(kw_only=True)
+class Work(DataItem):
+    """
+    https://opensubsonic.netlify.app/docs/responses/work/
+    """
+    name: str
+    music_brainz_id: Annotated[str | None, Alias("musicBrainzId")] = None
 
 
 @dataclass(kw_only=True)
@@ -233,6 +259,10 @@ class Child(DataItem):
     moods: list[str] | None = None
     replay_gain: Annotated[ReplayGain | None, Alias("replayGain")] = None
     explicit_status: Annotated[str | None, Alias("explicitStatus")] = None
+    isrc: list[str] | None = None
+    works: list[Work] | None = None
+    movements: list[Movement] | None = None
+    groupings: list[str] | None = None
 
 
 @dataclass(kw_only=True)
@@ -267,6 +297,7 @@ class DiscTitle(DataItem):
     """
     disc: int
     title: str
+    cover_art: Annotated[str | None, Alias("coverArt")] = None
 
 
 @dataclass(kw_only=True)
@@ -311,10 +342,12 @@ class Indexes(DataItem):
 
 
 @dataclass(kw_only=True)
-class IndexID3(Index):
+class IndexID3(DataItem):
     """
     https://opensubsonic.netlify.app/docs/responses/indexid3/
     """
+    name: str
+    artist: list[ArtistID3] | None = None
 
 
 @dataclass(kw_only=True)
@@ -326,6 +359,7 @@ class InternetRadioStation(DataItem):
     name: str
     stream_url: Annotated[str, Alias("streamUrl")]
     home_page_url: Annotated[str | None, Alias("homePageUrl")] = None
+    cover_art: Annotated[str | None, Alias("coverArt")] = None
 
 
 @dataclass(kw_only=True)
@@ -406,6 +440,9 @@ class NowPlayingEntry(Child):
     minutes_ago: Annotated[int, Alias("minutesAgo")]
     player_id: Annotated[int, Alias("playerId")]
     player_name: Annotated[str | None, Alias("playerName")] = None
+    state: str | None = None
+    position_ms: Annotated[int | None, Alias("positionMs")] = None
+    playback_rate: Annotated[float | None, Alias("playbackRate")] = None
 
 
 @dataclass(kw_only=True)
@@ -433,6 +470,8 @@ class Playlist(DataItem):
     public: bool | None = None
     cover_art: Annotated[str | None, Alias("coverArt")] = None
     allowed_user: Annotated[list[str] | None, Alias("allowedUser")] = None
+    readonly: bool | None = None
+    valid_until: Annotated[str | None, Alias("validUntil")] = None
     entry: list[Child] | None = None
 
 
@@ -460,7 +499,7 @@ class PodcastChannel(DataItem):
     title: str | None = None
     description: str | None = None
     cover_art: Annotated[str | None, Alias("coverArt")] = None
-    original_image_url: Annotated[str | None, Alias("origianlImageUrl")] = None
+    original_image_url: Annotated[str | None, Alias("originalImageUrl")] = None
     error_message: Annotated[str | None, Alias("errorMessage")] = None
     episode: list[PodcastEpisode] | None = None
 
@@ -471,7 +510,7 @@ class PodcastEpisode(Child):
     """
     channel_id: Annotated[str, Alias("channelId")]
     status: PodcastStatus
-    stream_id: Annotated[str, Alias("streamId")]
+    stream_id: Annotated[str | None, Alias("streamId")] = None
     description: str | None = None
     publish_date: Annotated[str | None, Alias("publishDate")] = None
 
@@ -570,6 +609,41 @@ class Starred2(SearchResult3):
 
 
 @dataclass(kw_only=True)
+class Cue(DataItem):
+    """
+    https://opensubsonic.netlify.app/docs/responses/cue/
+    """
+    start: int
+    byte_start: Annotated[int, Alias("byteStart")]
+    byte_end: Annotated[int, Alias("byteEnd")]
+    value: str
+    end: int | None = None
+
+
+@dataclass(kw_only=True)
+class CueLine(DataItem):
+    """
+    https://opensubsonic.netlify.app/docs/responses/cueline/
+    """
+    index: int
+    value: str
+    cue: list[Cue]
+    start: int | None = None
+    end: int | None = None
+    agent_id: Annotated[str | None, Alias("agentId")] = None
+
+
+@dataclass(kw_only=True)
+class LyricsAgent(DataItem):
+    """
+    https://opensubsonic.netlify.app/docs/responses/agent/
+    """
+    id: str
+    role: str
+    name: str | None = None
+
+
+@dataclass(kw_only=True)
 class StructuredLyrics(DataItem):
     """
     https://opensubsonic.netlify.app/docs/responses/structuredlyrics/
@@ -580,6 +654,9 @@ class StructuredLyrics(DataItem):
     display_artist: Annotated[str | None, Alias("displayArtist")] = None
     display_title: Annotated[str | None, Alias("displayTitle")] = None
     offset: float | None = None
+    kind: str | None = None
+    agents: list[LyricsAgent] | None = None
+    cue_line: Annotated[list[CueLine] | None, Alias("cueLine")] = None
 
 
 @dataclass(kw_only=True)

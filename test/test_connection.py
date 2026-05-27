@@ -12,14 +12,14 @@ import aiohttp
 from libopensonic import AsyncConnection
 from libopensonic._async.connection import API_VERSION
 from libopensonic.media.media_types import (
-    Album, AlbumID3, AlbumInfo, ArtistID3, ArtistInfo, ArtistInfo2,
-    Artists, Bookmark, ChatMessage, Child, Directory, Error, Genre,
-    Indexes, InternetRadioStation, JukeboxPlaylist, JukeboxStatus,
-    Lyrics, MusicFolder, NowPlayingEntry, OpenSubsonicExtension,
-    Playlist, PlayQueue, PodcastChannel, PodcastEpisode, PodcastStatus,
-    ScanStatus, SearchResult2, SearchResult3, Share, Starred, Starred2,
-    StructuredLyrics, User, Line, ItemGenre, Artist, Index, Contributor,
-    ReplayGain, DiscTitle, RecordLabel, ItemDate
+    Album, AlbumID3, AlbumID3WithSongs, AlbumInfo, ArtistID3, ArtistInfo, ArtistInfo2,
+    Artists, Bookmark, ChatMessage, Child, Contributor, Cue, CueLine, Directory,
+    DiscTitle, Error, Genre, Index, IndexID3, Indexes, InternetRadioStation,
+    ItemDate, ItemGenre, JukeboxPlaylist, JukeboxStatus, Line, Lyrics, LyricsAgent,
+    Movement, MusicFolder, NowPlayingEntry, OpenSubsonicExtension, Playlist, PlayQueue,
+    PodcastChannel, PodcastEpisode, PodcastStatus, RecordLabel, ReplayGain, ScanStatus,
+    SearchResult2, SearchResult3, Share, Starred, Starred2, StructuredLyrics, User,
+    Artist, Work
 )
 from libopensonic import errors
 
@@ -2152,8 +2152,8 @@ class TestNestedStructures:
     """Tests for nested dataclass structures."""
 
     def test_album_with_songs(self):
-        """Test AlbumID3 with nested song Children."""
-        album = AlbumID3.from_dict({
+        """Test AlbumID3WithSongs with nested song Children."""
+        album = AlbumID3WithSongs.from_dict({
             "id": "alb-1",
             "name": "Album",
             "songCount": 2,
@@ -2211,6 +2211,236 @@ class TestNestedStructures:
         assert len(lyrics.line) == 2
         assert lyrics.line[0].start == 0.0
         assert isinstance(lyrics.line[0], Line)
+
+
+# ============================================================================
+# MEDIA TYPE CONFORMANCE TESTS
+# ============================================================================
+
+class TestAliasFixesAndNewFields:
+    """Tests confirming alias bug fixes and newly added fields are wired correctly."""
+
+    def test_album_id3_record_labels_alias(self):
+        """recordLabels (plural) is the correct JSON key."""
+        album = AlbumID3.from_dict({
+            "id": "a1", "name": "A", "songCount": 0, "duration": 0, "created": "2024-01-01",
+            "recordLabels": [{"name": "Warp Records"}]
+        })
+        assert album.record_labels is not None
+        assert album.record_labels[0].name == "Warp Records"
+
+    def test_album_id3_no_song_field(self):
+        """AlbumID3 no longer carries songs; AlbumID3WithSongs does."""
+        assert not hasattr(AlbumID3, 'song') or 'song' not in AlbumID3.__dataclass_fields__
+        assert 'song' in AlbumID3WithSongs.__dataclass_fields__
+
+    def test_artist_rating_fields(self):
+        """Artist carries userRating and averageRating from the spec."""
+        artist = Artist.from_dict({
+            "id": "ar1", "name": "Aphex Twin",
+            "userRating": 5, "averageRating": 4.7
+        })
+        assert artist.user_rating == 5
+        assert artist.average_rating == 4.7
+
+    def test_artist_info2_similar_artist_alias(self):
+        """similarArtist (correct spelling) deserialises into similar_artist."""
+        info = ArtistInfo2.from_dict({
+            "similarArtist": [{"id": "x1", "name": "µ-Ziq"}]
+        })
+        assert info.similar_artist is not None
+        assert info.similar_artist[0].name == "µ-Ziq"
+
+    def test_artists_index_uses_index_id3(self):
+        """Artists.index holds IndexID3 objects, not Index."""
+        artists = Artists.from_dict({
+            "ignoredArticles": "The",
+            "index": [{"name": "A", "artist": [{"id": "a1", "name": "Autechre"}]}]
+        })
+        assert artists.index is not None
+        assert isinstance(artists.index[0], IndexID3)
+        assert isinstance(artists.index[0].artist[0], ArtistID3)
+
+    def test_child_new_fields(self):
+        """Child accepts isrc, works, movements, groupings."""
+        child = Child.from_dict({
+            "id": "s1", "isDir": False, "title": "Track",
+            "isrc": ["GBAYE0000001"],
+            "works": [{"name": "Symphony No. 5", "musicBrainzId": "mbid-1"}],
+            "movements": [{"name": "Allegro con brio", "number": 1, "count": 4}],
+            "groupings": ["Classical", "Orchestral"]
+        })
+        assert child.isrc == ["GBAYE0000001"]
+        assert child.works[0].name == "Symphony No. 5"
+        assert isinstance(child.works[0], Work)
+        assert child.movements[0].number == 1
+        assert isinstance(child.movements[0], Movement)
+        assert child.groupings == ["Classical", "Orchestral"]
+
+    def test_disc_title_cover_art(self):
+        """DiscTitle now carries optional coverArt."""
+        dt = DiscTitle.from_dict({"disc": 1, "title": "Disc One", "coverArt": "art-1"})
+        assert dt.cover_art == "art-1"
+
+    def test_index_id3_standalone(self):
+        """IndexID3 is standalone (not inheriting from Index) with ArtistID3 artists."""
+        idx = IndexID3.from_dict({
+            "name": "B",
+            "artist": [{"id": "b1", "name": "Burial"}]
+        })
+        assert idx.name == "B"
+        assert isinstance(idx.artist[0], ArtistID3)
+        assert not isinstance(idx.artist[0], Artist)
+
+    def test_internet_radio_station_cover_art(self):
+        """InternetRadioStation accepts coverArt."""
+        station = InternetRadioStation.from_dict({
+            "id": "r1", "name": "NTS", "streamUrl": "https://nts.live/stream",
+            "coverArt": "art-r1"
+        })
+        assert station.cover_art == "art-r1"
+
+    def test_now_playing_entry_playback_report_fields(self):
+        """NowPlayingEntry carries state, positionMs, playbackRate from playbackReport extension."""
+        entry = NowPlayingEntry.from_dict({
+            "id": "s1", "isDir": False, "title": "Track",
+            "username": "alice", "minutesAgo": 2, "playerId": 1,
+            "state": "playing", "positionMs": 42000, "playbackRate": 1.0
+        })
+        assert entry.state == "playing"
+        assert entry.position_ms == 42000
+        assert entry.playback_rate == 1.0
+
+    def test_playlist_new_fields(self):
+        """Playlist carries readonly and validUntil."""
+        pl = Playlist.from_dict({
+            "id": "p1", "name": "P", "songCount": 0, "duration": 0,
+            "created": "2024-01-01", "changed": "2024-01-01",
+            "readonly": True, "validUntil": "2025-12-31T00:00:00Z"
+        })
+        assert pl.readonly is True
+        assert pl.valid_until == "2025-12-31T00:00:00Z"
+
+    def test_podcast_channel_original_image_url_alias(self):
+        """originalImageUrl (correct spelling) deserialises into original_image_url."""
+        ch = PodcastChannel.from_dict({
+            "id": "pc1", "url": "https://feed.example.com", "status": "completed",
+            "originalImageUrl": "https://example.com/img.jpg"
+        })
+        assert ch.original_image_url == "https://example.com/img.jpg"
+
+    def test_podcast_episode_stream_id_optional(self):
+        """streamId is optional on PodcastEpisode."""
+        ep = PodcastEpisode.from_dict({
+            "id": "ep1", "isDir": False, "title": "Episode",
+            "channelId": "pc1", "status": "completed"
+        })
+        assert ep.stream_id is None
+
+    def test_structured_lyrics_v2_fields(self):
+        """StructuredLyrics accepts kind, agents, and cueLine from songLyrics v2."""
+        lyrics = StructuredLyrics.from_dict({
+            "lang": "en", "synced": True,
+            "line": [{"value": "Hello world", "start": 0.0}],
+            "kind": "main",
+            "agents": [{"id": "ag1", "role": "main", "name": "Singer"}],
+            "cueLine": [{
+                "index": 0,
+                "value": "Hello world",
+                "cue": [
+                    {"start": 0, "byteStart": 0, "byteEnd": 4, "value": "Hello"},
+                    {"start": 500, "byteStart": 6, "byteEnd": 10, "value": "world"}
+                ]
+            }]
+        })
+        assert lyrics.kind == "main"
+        assert len(lyrics.agents) == 1
+        assert isinstance(lyrics.agents[0], LyricsAgent)
+        assert lyrics.agents[0].role == "main"
+        assert len(lyrics.cue_line) == 1
+        assert isinstance(lyrics.cue_line[0], CueLine)
+        assert lyrics.cue_line[0].cue[0].value == "Hello"
+        assert isinstance(lyrics.cue_line[0].cue[0], Cue)
+
+
+class TestNewTypes:
+    """Tests for newly introduced media types."""
+
+    def test_work(self):
+        w = Work.from_dict({"name": "Symphony No. 9", "musicBrainzId": "mb-1"})
+        assert w.name == "Symphony No. 9"
+        assert w.music_brainz_id == "mb-1"
+
+    def test_work_minimal(self):
+        w = Work.from_dict({"name": "Untitled"})
+        assert w.music_brainz_id is None
+
+    def test_movement(self):
+        m = Movement.from_dict({"name": "Allegro", "number": 1, "count": 4})
+        assert m.name == "Allegro"
+        assert m.number == 1
+        assert m.count == 4
+
+    def test_movement_minimal(self):
+        m = Movement.from_dict({"name": "Adagio"})
+        assert m.number is None
+        assert m.count is None
+
+    def test_lyrics_agent(self):
+        a = LyricsAgent.from_dict({"id": "ag1", "role": "main", "name": "Lead Vocal"})
+        assert a.id == "ag1"
+        assert a.role == "main"
+        assert a.name == "Lead Vocal"
+
+    def test_lyrics_agent_minimal(self):
+        a = LyricsAgent.from_dict({"id": "ag2", "role": "bg"})
+        assert a.name is None
+
+    def test_cue(self):
+        c = Cue.from_dict({"start": 0, "byteStart": 0, "byteEnd": 4, "value": "Hello", "end": 400})
+        assert c.start == 0
+        assert c.byte_start == 0
+        assert c.byte_end == 4
+        assert c.value == "Hello"
+        assert c.end == 400
+
+    def test_cue_minimal(self):
+        c = Cue.from_dict({"start": 0, "byteStart": 0, "byteEnd": 4, "value": "Hi"})
+        assert c.end is None
+
+    def test_cue_line(self):
+        cl = CueLine.from_dict({
+            "index": 0,
+            "value": "Hello world",
+            "start": 0,
+            "end": 1000,
+            "agentId": "ag1",
+            "cue": [{"start": 0, "byteStart": 0, "byteEnd": 4, "value": "Hello"}]
+        })
+        assert cl.index == 0
+        assert cl.agent_id == "ag1"
+        assert len(cl.cue) == 1
+        assert isinstance(cl.cue[0], Cue)
+
+    def test_album_id3_with_songs(self):
+        album = AlbumID3WithSongs.from_dict({
+            "id": "a1", "name": "Drukqs", "songCount": 2,
+            "duration": 6000, "created": "2001-10-01",
+            "song": [
+                {"id": "s1", "isDir": False, "title": "Avril 14th"},
+                {"id": "s2", "isDir": False, "title": "Nanou2"}
+            ]
+        })
+        assert len(album.song) == 2
+        assert isinstance(album.song[0], Child)
+
+    def test_album_id3_with_songs_no_songs(self):
+        """AlbumID3WithSongs song field is optional."""
+        album = AlbumID3WithSongs.from_dict({
+            "id": "a1", "name": "Album", "songCount": 0,
+            "duration": 0, "created": "2024-01-01"
+        })
+        assert album.song is None
 
 
 # ============================================================================

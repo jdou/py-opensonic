@@ -15,12 +15,13 @@ You should have received a copy of the GNU General Public License
 along with py-opensonic.  If not, see <http://www.gnu.org/licenses/>
 """
 
-from .media_types import (Album, AlbumID3, AlbumInfo, Artist, Artists, ArtistID3, ArtistInfo,
-                          ArtistInfo2, Bookmark, ChatMessage, Child, Contributor, Directory,
-                          DiscTitle, Error, Genre, Index, Indexes, IndexID3, ItemDate, ItemGenre,
-                          JukeboxPlaylist, JukeboxStatus, Line, Lyrics, MusicFolder,
+from .media_types import (Album, AlbumID3, AlbumID3WithSongs, AlbumInfo, Artist, Artists,
+                          ArtistID3, ArtistInfo, ArtistInfo2, Bookmark, ChatMessage, Child,
+                          Contributor, Cue, CueLine, Directory, DiscTitle, Error, Genre,
+                          Index, Indexes, IndexID3, ItemDate, ItemGenre, JukeboxPlaylist,
+                          JukeboxStatus, Line, Lyrics, LyricsAgent, Movement, MusicFolder,
                           NowPlayingEntry, OpenSubsonicExtension, Playlist, PlayQueue,
                           PodcastChannel, PodcastEpisode, PodcastStatus, RecordLabel,
                           ReplayGain, ScanStatus, SearchResult2, SearchResult3, Share,
                           Starred, Starred2, StructuredLyrics, TokenInfo, TopSongs,
-                          User)
+                          User, Work)
