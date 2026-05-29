@@ -1,3 +1,11 @@
+##10.0.0
+
+Update media_types.py with changes to the opensubsonic specification.
+Add a get_podcast_episode method as per spec.
+Remove the unasync copy Connection object and instead make it a thin wrapper around
+the async object that uses a class decorator to present the same methods in a synchronous
+class.
+
 ##9.2.0
 
 Add possiblity to add range requests to stream method.

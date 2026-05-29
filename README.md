@@ -5,6 +5,10 @@ This started its life as the [py-sonic](https://github.com/crustymonkey/py-sonic
 I have tested with Gonic (and continue to do so against each stable docker
 release). Please open issues if you discover problems with other implementations.
 
+As of 10.0.0 we have stopped using unasync and instead the sychronous Connection object is a
+thin wrapper around the AsyncConnection that runs an event loop and makes async method calls
+for the user.
+
 As of 9.0.0 we use [unasync](https://github.com/python-trio/unasync/) to generate the synchronous
 Connection class from the Async one. This will stop us from having to maintain duplicate code in
 the two classes. If you submit a PR that changes the Async class, please be sure to run
@@ -32,7 +36,7 @@ You can also install directly using *pip* or *easy_install*
 
 ## USAGE ##
 
-This library follows the REST API almost exactly (for now).  If you follow the 
+This library follows the REST API almost exactly (for now).  If you follow the
 documentation on https://opensubsonic.netlify.app/docs/ or you do a:
 
     pydoc libopensonic.connection
