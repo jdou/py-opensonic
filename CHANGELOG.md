@@ -1,3 +1,8 @@
+##10.1.0
+
+Add get_stream_url() method to build a URL and parameter dictionary to be handed to a consumer
+which can be used to make multiple requests (with varying byte ranges for instance).
+
 ##10.0.0
 
 Update media_types.py with changes to the opensubsonic specification.
