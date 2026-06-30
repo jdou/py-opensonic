@@ -1329,6 +1329,66 @@ class TestDownloadStream:
         call_args = mock_session.get.call_args
         assert call_args.kwargs.get("headers") is None
 
+    def test_get_stream_url_returns_url_and_params(self, conn):
+        """Test get_stream_url returns a url and a params dict without network I/O."""
+        url, params = conn.get_stream_url("song-123", max_bit_rate=320)
+
+        assert url == "http://localhost:4040/rest/stream.view"
+        assert params["id"] == "song-123"
+        assert params["maxBitRate"] == "320"
+
+    def test_get_stream_url_no_network_call(self, conn, mock_session):
+        """Test get_stream_url makes no request."""
+        conn.get_stream_url("song-123")
+
+        mock_session.get.assert_not_called()
+        mock_session.post.assert_not_called()
+
+    def test_get_stream_url_booleans_are_lowercase_strings(self, conn):
+        """Test bool params serialize as lowercase 'true'/'false', not Python's True/False."""
+        _, params = conn.get_stream_url("song-123", estimate_length=True, converted=False)
+
+        assert params["estimateContentLength"] == "true"
+        assert params["converted"] == "false"
+
+    def test_get_stream_url_omits_none_params(self, conn):
+        """Test optional params that are None are excluded from the dict."""
+        _, params = conn.get_stream_url("song-123")
+
+        assert "format" not in params
+        assert "timeOffset" not in params
+        assert "size" not in params
+
+    def test_get_stream_url_includes_auth_params(self, conn):
+        """Test the params dict carries auth credentials rather than embedding them in the url."""
+        url, params = conn.get_stream_url("song-123")
+
+        assert "?" not in url
+        assert params["u"] == "testuser"
+        assert "t" in params
+        assert "s" in params
+
+    def test_get_stream_url_api_key_auth(self, mock_session):
+        """Test get_stream_url with api_key authentication."""
+        with patch('aiohttp.ClientSession', return_value=mock_session):
+            c = AsyncConnection(
+                base_url="http://localhost",
+                username=None,
+                password=None,
+                api_key="secret-key-123"
+            )
+
+        _, params = c.get_stream_url("song-123")
+        assert params["apiKey"] == "secret-key-123"
+        assert "u" not in params
+
+    def test_get_stream_url_use_views_false(self, conn):
+        """Test get_stream_url omits the .view suffix when use_views is False."""
+        conn._use_views = False
+
+        url, _ = conn.get_stream_url("song-123")
+        assert url == "http://localhost:4040/rest/stream"
+
 # ============================================================================
 # JUKEBOX METHODS
 # ============================================================================

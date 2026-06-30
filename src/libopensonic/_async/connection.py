@@ -2241,6 +2241,62 @@ class AsyncConnection:
         return ScanStatus.from_dict(dres['scanStatus'])
 
 
+    def get_stream_url(self, sid:str, max_bit_rate:int=0, tformat:str|None=None,
+               time_offset:int|None=None, size:str|None=None,
+               estimate_length:bool=False, converted:bool=False) -> tuple[str, dict[str, str]]:
+        """Build the stream URL and request parameters without performing the request.
+
+        Useful for handing off to an external player (e.g. ffmpeg) that reads
+        directly from a URL rather than through this library's response
+        object. No network call is made.
+
+        Subsonic authentication is normally carried in the URL's query
+        string, which risks leaking credentials through proxy logs, server
+        logs, or process listings (e.g. a stream URL visible in `ps aux`).
+        To avoid that, `params` is returned separately from `url` and should
+        be sent as the body of a POST request rather than appended to the
+        URL. The same `params` can be reused across multiple requests
+        against `url` -- for example, ffmpeg issuing its own repeated
+        range-adjusted requests while seeking through a VBR stream, without
+        needing to come back through this library for each one.
+
+        Since: 1.0.0
+        Docs: https://opensubsonic.netlify.app/docs/endpoints/stream/
+
+        Args:
+            sid: The ID of the music file to stream.
+            max_bit_rate: Limit the bitrate to this value in kilobits per
+                second. 0 means no limit. Legal values: 0, 32, 40, 48, 56,
+                64, 80, 96, 112, 128, 160, 192, 224, 256, 320.
+            tformat: Target format (e.g. "mp3" or "flv"). Use "raw" to
+                disable transcoding.
+            time_offset: Start the video stream at this offset in seconds.
+                Video only.
+            size: Requested video size as "WxH", e.g. "640x480".
+            estimate_length: If True, set an estimated Content-Length header
+                for transcoded media.
+            converted: If True and a converted MP4 version exists, return the
+                converted video instead of the original. Video only.
+
+        Returns:
+            A tuple of (url, params). POST to url with params as the request
+            body to start the stream.
+        """
+        method = 'stream'
+        if self._use_views:
+            method += '.view'
+        url = f"{self._base_url}:{self._port}/{self._server_path}/{method}"
+
+        q = self._get_query_dict({'id': sid, 'maxBitRate': max_bit_rate,
+            'format': tformat, 'timeOffset': time_offset, 'size': size,
+            'estimateContentLength': estimate_length,
+            'converted': converted})
+        qdict = self._get_base_qdict()
+        qdict.update(q)
+
+        return url, self._stringify_qdict(qdict)
+
+
     async def stream(self, sid:str, max_bit_rate:int=0, tformat:str|None=None,
                time_offset:int|None=None, size:str|None=None,
                estimate_length:bool=False, converted:bool=False, byte_range:str|None=None) -> ClientResponse:
@@ -2498,6 +2554,20 @@ class AsyncConnection:
             if v is None:
                 del d[k]
         return d
+
+
+    def _stringify_qdict(self, d:dict) -> dict[str, str]:
+        """Convert all values to the string form Subsonic expects on the wire.
+
+        Booleans must be lowercase "true"/"false", not Python's "True"/"False".
+        """
+        out = {}
+        for k, v in d.items():
+            if isinstance(v, bool):
+                out[k] = 'true' if v else 'false'
+            else:
+                out[k] = str(v)
+        return out
 
 
     def _get_base_qdict(self) -> dict:
