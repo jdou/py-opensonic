@@ -1,3 +1,7 @@
+##10.2.0
+
+Make get_stream_url() honor the use_get property, adding params to the URL when use_get=True
+
 ##10.1.0
 
 Add get_stream_url() method to build a URL and parameter dictionary to be handed to a consumer
