@@ -18,6 +18,7 @@ along with py-opensonic.  If not, see <http://www.gnu.org/licenses/>
 from hashlib import md5
 from netrc import netrc
 import os
+from urllib.parse import urlencode
 
 import aiohttp
 from aiohttp import ClientResponse
@@ -338,7 +339,7 @@ class AsyncConnection:
         if song_ids is None:
             song_ids = []
 
-        if playlist_id == name == None:
+        if playlist_id is None and name is None:
             raise errors.ArgumentError('You must supply either a playlistId or a name')
         if playlist_id is not None and name is not None:
             raise errors.ArgumentError('You can only supply either a playlistId '
@@ -2279,8 +2280,10 @@ class AsyncConnection:
                 converted video instead of the original. Video only.
 
         Returns:
-            A tuple of (url, params). POST to url with params as the request
-            body to start the stream.
+            A tuple of (url, params). If use_get is True, all parameters are
+            encoded into the URL query string and params is an empty dict.
+            Otherwise url has no query string and params contains all request
+            parameters (including auth) for use as a POST body.
         """
         method = 'stream'
         if self._use_views:
@@ -2293,8 +2296,11 @@ class AsyncConnection:
             'converted': converted})
         qdict = self._get_base_qdict()
         qdict.update(q)
+        params = self._stringify_qdict(qdict)
 
-        return url, self._stringify_qdict(qdict)
+        if self._use_get:
+            return f"{url}?{urlencode(params)}", {}
+        return url, params
 
 
     async def stream(self, sid:str, max_bit_rate:int=0, tformat:str|None=None,

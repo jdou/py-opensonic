@@ -1387,7 +1387,26 @@ class TestDownloadStream:
         conn._use_views = False
 
         url, _ = conn.get_stream_url("song-123")
-        assert url == "http://localhost:4040/rest/stream"
+        assert url.split("?")[0] == "http://localhost:4040/rest/stream"
+
+    def test_get_stream_url_use_get_encodes_params_in_url(self, conn):
+        """Test that use_get=True encodes all params into the URL query string."""
+        conn._use_get = True
+
+        url, params = conn.get_stream_url("song-123")
+
+        assert params == {}
+        assert "?" in url
+        assert "id=song-123" in url
+        assert "u=testuser" in url
+
+    def test_get_stream_url_use_get_returns_empty_params(self, conn):
+        """Test that use_get=True returns an empty params dict."""
+        conn._use_get = True
+
+        _, params = conn.get_stream_url("song-123")
+
+        assert params == {}
 
 # ============================================================================
 # JUKEBOX METHODS
