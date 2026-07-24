@@ -1,3 +1,7 @@
+##10.2.1
+
+Stringify query dicts when using GET methods.
+
 ##10.2.0
 
 Make get_stream_url() honor the use_get property, adding params to the URL when use_get=True
