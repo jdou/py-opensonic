@@ -2694,22 +2694,18 @@ class AsyncConnection:
         qdict = self._get_base_qdict()
         if query is not None:
             qdict.update(query)
+        qdict = self._stringify_qdict(qdict)
 
         if self._use_views:
             method += '.view'
         url = f"{self._base_url}:{self._port}/{self._server_path}/{method}"
 
-        # This dictionary is empty in Async (valid for aiohttp)
-        # unasync will replace the line below and the **req_kwargs in the get and post methods
-        # Yeah, it's stupid, but so is function coloring...
-        req_kwargs = {}
-
         if not self._sess:
             self._sess = aiohttp.ClientSession()
 
         if self._use_get:
-            return await self._sess.get(url, params=qdict, timeout=self._timeout, headers=headers, **req_kwargs)
-        return await self._sess.post(url, data=qdict, timeout=self._timeout, headers=headers,**req_kwargs)
+            return await self._sess.get(url, params=qdict, timeout=self._timeout, headers=headers)
+        return await self._sess.post(url, data=qdict, timeout=self._timeout, headers=headers)
 
 
     async def _do_request_with_list(self, method:str, list_name:str, alist:list,
@@ -2719,9 +2715,8 @@ class AsyncConnection:
         Like _do_request but appends a list of values under the same key,
         bypassing the limitation of urlencode().
         """
-        qdict = self._get_base_qdict()
-        if query is not None:
-            qdict.update(query)
+        qdict: dict[str, str | list] = {}
+        qdict.update(self._stringify_qdict(self._get_base_qdict() | (query or {})))
         qdict[list_name] = alist
 
         if self._use_views:
@@ -2751,9 +2746,8 @@ class AsyncConnection:
         Returns:
             The aiohttp.ClientResponse object.
         """
-        qdict = self._get_base_qdict()
-        if query is not None:
-            qdict.update(query)
+        qdict: dict[str, str | list] = {}
+        qdict.update(self._stringify_qdict(self._get_base_qdict() | (query or {})))
         qdict.update(list_map)
 
         if self._use_views:
