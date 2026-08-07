@@ -1,3 +1,8 @@
+##10.3.0
+
+Add methods for newest end points in the spec and the necessary types for them.
+Add Extension class to hold Extension strings for comparison.
+
 ##10.2.1
 
 Stringify query dicts when using GET methods.
