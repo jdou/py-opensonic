@@ -108,10 +108,17 @@ class ArtistID3(DataItem):
     cover_art: Annotated[str | None, Alias("coverArt")] = None
     artist_image_url: Annotated[str | None, Alias("artistImageUrl")] = None
     starred: str | None = None
-    album: list[AlbumID3] | None = None
     music_brainz_id: Annotated[str | None, Alias("musicBrainzId")] = None
     sort_name: Annotated[str | None, Alias("sortName")] = None
     roles: list[str] | None = None
+
+
+@dataclass(kw_only=True)
+class ArtistWithAlbumsID3(ArtistID3):
+    """
+    https://opensubsonic.netlify.app/docs/responses/artistwithalbumsid3/
+    """
+    album: list[AlbumID3] | None = None
 
 
 @dataclass(kw_only=True)
@@ -489,6 +496,19 @@ class PlayQueue(DataItem):
 
 
 @dataclass(kw_only=True)
+class PlayQueueByIndex(DataItem):
+    """
+    https://opensubsonic.netlify.app/docs/responses/playqueuebyindex/
+    """
+    username: str
+    changed: str
+    changed_by: Annotated[str, Alias("changedBy")]
+    current_index: Annotated[int | None, Alias("currentIndex")] = None
+    position: int | None = None
+    entry: list[Child] | None = None
+
+
+@dataclass(kw_only=True)
 class PodcastChannel(DataItem):
     """
     https://opensubsonic.netlify.app/docs/responses/podcastchannel/
@@ -606,6 +626,44 @@ class Starred2(SearchResult3):
     https://opensubsonic.netlify.app/docs/responses/starred2/
     While named differently, this is the same as a search3 response
     """
+
+
+@dataclass(kw_only=True)
+class SonicMatch(DataItem):
+    """
+    https://opensubsonic.netlify.app/docs/responses/sonicmatch/
+    """
+    entry: Child
+    similarity: float
+
+
+@dataclass(kw_only=True)
+class StreamDetails(DataItem):
+    """
+    https://opensubsonic.netlify.app/docs/responses/streamdetails/
+    """
+    protocol: str
+    container: str
+    codec: str
+    audio_channels: Annotated[int | None, Alias("audioChannels")] = None
+    audio_bitrate: Annotated[int | None, Alias("audioBitrate")] = None
+    audio_profile: Annotated[str | None, Alias("audioProfile")] = None
+    audio_samplerate: Annotated[int | None, Alias("audioSamplerate")] = None
+    audio_bitdepth: Annotated[int | None, Alias("audioBitdepth")] = None
+
+
+@dataclass(kw_only=True)
+class TranscodeDecision(DataItem):
+    """
+    https://opensubsonic.netlify.app/docs/responses/transcodedecision/
+    """
+    can_direct_play: Annotated[bool, Alias("canDirectPlay")]
+    can_transcode: Annotated[bool, Alias("canTranscode")]
+    transcode_reason: Annotated[list[str] | None, Alias("transcodeReason")] = None
+    error_reason: Annotated[str | None, Alias("errorReason")] = None
+    transcode_params: Annotated[str | None, Alias("transcodeParams")] = None
+    source_stream: Annotated[StreamDetails | None, Alias("sourceStream")] = None
+    transcode_stream: Annotated[StreamDetails | None, Alias("transcodeStream")] = None
 
 
 @dataclass(kw_only=True)

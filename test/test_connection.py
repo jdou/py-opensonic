@@ -8,12 +8,12 @@ import pytest
 from libopensonic import AsyncConnection
 from libopensonic._async.connection import API_VERSION
 from libopensonic.media.media_types import (
-    Album, AlbumID3, AlbumInfo, ArtistID3, ArtistInfo, ArtistInfo2,
-    Artists, Bookmark, ChatMessage, Child, Directory, Genre, Indexes,
-    InternetRadioStation, JukeboxPlaylist, JukeboxStatus, Lyrics, MusicFolder,
-    NowPlayingEntry, OpenSubsonicExtension, Playlist, PlayQueue, PodcastChannel,
-    PodcastEpisode, PodcastStatus, ScanStatus, SearchResult2, SearchResult3,
-    Share, Starred, Starred2, StructuredLyrics, User,
+    Album, AlbumID3, AlbumInfo, ArtistInfo, ArtistInfo2, ArtistWithAlbumsID3, Artists, Bookmark, ChatMessage, Child, Directory,
+    Genre, Indexes, InternetRadioStation, JukeboxPlaylist, JukeboxStatus,
+    Lyrics, MusicFolder, NowPlayingEntry, OpenSubsonicExtension, Playlist,
+    PlayQueue, PlayQueueByIndex, PodcastChannel, PodcastEpisode, PodcastStatus,
+    ScanStatus, SearchResult2, SearchResult3, Share, SonicMatch, Starred,
+    Starred2, StructuredLyrics, TokenInfo, TranscodeDecision, User,
 )
 from libopensonic import errors
 
@@ -899,8 +899,9 @@ class TestMediaRetrieval:
         mock_session.post = AsyncMock(return_value=mock_response)
 
         result = await conn.get_artist("artist-1")
-        assert isinstance(result, ArtistID3)
+        assert isinstance(result, ArtistWithAlbumsID3)
         assert result.name == "Artist Name"
+        assert len(result.album) == 1
 
     @pytest.mark.asyncio
     async def test_get_artists(self, conn, mock_session, mock_response):
@@ -2003,6 +2004,317 @@ class TestEmptyAndMissingResponses:
 
         result = await conn.get_genres()
         assert result == []
+
+
+# ============================================================================
+# PLAY QUEUE BY INDEX
+# ============================================================================
+
+class TestPlayQueueByIndex:
+    """Tests for index-based play queue methods."""
+
+    @pytest.mark.asyncio
+    async def test_get_play_queue_by_index(self, conn, mock_session, mock_response):
+        """Test get_play_queue_by_index returns a PlayQueueByIndex."""
+        data = {
+            "playQueueByIndex": {
+                "username": "testuser",
+                "changed": "2024-01-01T00:00:00Z",
+                "changedBy": "test-app",
+                "currentIndex": 1,
+                "position": 30000,
+                "entry": [
+                    {"id": "s1", "parent": "a1", "title": "Song 1", "isDir": False},
+                    {"id": "s2", "parent": "a1", "title": "Song 2", "isDir": False},
+                ],
+            }
+        }
+        set_json_response(mock_response, make_response(data))
+        mock_session.post = AsyncMock(return_value=mock_response)
+
+        result = await conn.get_play_queue_by_index()
+        assert isinstance(result, PlayQueueByIndex)
+        assert result.username == "testuser"
+        assert result.current_index == 1
+        assert result.position == 30000
+        assert len(result.entry) == 2
+
+    @pytest.mark.asyncio
+    async def test_save_play_queue_by_index(self, conn, mock_session, mock_response):
+        """Test save_play_queue_by_index with songs."""
+        set_json_response(mock_response, make_response({}))
+        mock_session.post = AsyncMock(return_value=mock_response)
+
+        result = await conn.save_play_queue_by_index(
+            ids=["s1", "s2", "s3"], current_index=0, position=0
+        )
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_save_play_queue_by_index_clears_when_empty(
+        self, conn, mock_session, mock_response
+    ):
+        """Test save_play_queue_by_index with no args clears the queue."""
+        set_json_response(mock_response, make_response({}))
+        mock_session.post = AsyncMock(return_value=mock_response)
+
+        result = await conn.save_play_queue_by_index()
+        assert result is True
+        mock_session.post.assert_called_once()
+        call_kwargs = mock_session.post.call_args[1]
+        # No 'id' param should be in the data when clearing
+        assert "id" not in call_kwargs.get("data", {})
+
+
+# ============================================================================
+# SONIC SIMILARITY
+# ============================================================================
+
+class TestSonicSimilarity:
+    """Tests for audio-similarity methods."""
+
+    @pytest.mark.asyncio
+    async def test_get_sonic_similar_tracks(self, conn, mock_session, mock_response):
+        """Test get_sonic_similar_tracks returns SonicMatch list."""
+        data = {
+            "sonicMatch": [
+                {
+                    "entry": {"id": "s1", "parent": "a1", "title": "Close Song", "isDir": False},
+                    "similarity": 0.92,
+                },
+                {
+                    "entry": {"id": "s2", "parent": "a1", "title": "Similar Song", "isDir": False},
+                    "similarity": 0.75,
+                },
+            ]
+        }
+        set_json_response(mock_response, make_response(data))
+        mock_session.post = AsyncMock(return_value=mock_response)
+
+        result = await conn.get_sonic_similar_tracks("song-123", count=2)
+        assert len(result) == 2
+        assert isinstance(result[0], SonicMatch)
+        assert result[0].similarity == 0.92
+        assert result[0].entry.title == "Close Song"
+
+    @pytest.mark.asyncio
+    async def test_get_sonic_similar_tracks_empty(self, conn, mock_session, mock_response):
+        """Test get_sonic_similar_tracks returns empty list when no matches."""
+        set_json_response(mock_response, make_response({}))
+        mock_session.post = AsyncMock(return_value=mock_response)
+
+        result = await conn.get_sonic_similar_tracks("song-123")
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_find_sonic_path(self, conn, mock_session, mock_response):
+        """Test find_sonic_path returns ordered SonicMatch list."""
+        data = {
+            "sonicMatch": [
+                {
+                    "entry": {"id": "s1", "parent": "a1", "title": "Start Song", "isDir": False},
+                    "similarity": 1.0,
+                },
+                {
+                    "entry": {"id": "s2", "parent": "a1", "title": "Bridge Song", "isDir": False},
+                    "similarity": 0.6,
+                },
+                {
+                    "entry": {"id": "s3", "parent": "a1", "title": "End Song", "isDir": False},
+                    "similarity": 0.3,
+                },
+            ]
+        }
+        set_json_response(mock_response, make_response(data))
+        mock_session.post = AsyncMock(return_value=mock_response)
+
+        result = await conn.find_sonic_path("s1", "s3", count=25)
+        assert len(result) == 3
+        assert isinstance(result[0], SonicMatch)
+        assert result[0].similarity == 1.0
+        assert result[2].entry.id == "s3"
+
+    @pytest.mark.asyncio
+    async def test_find_sonic_path_empty(self, conn, mock_session, mock_response):
+        """Test find_sonic_path returns empty list when no path found."""
+        set_json_response(mock_response, make_response({}))
+        mock_session.post = AsyncMock(return_value=mock_response)
+
+        result = await conn.find_sonic_path("s1", "s2")
+        assert result == []
+
+
+# ============================================================================
+# TRANSCODING
+# ============================================================================
+
+class TestTranscoding:
+    """Tests for getTranscodeDecision and getTranscodeStream."""
+
+    @pytest.mark.asyncio
+    async def test_get_transcode_decision_direct_play(
+        self, conn, mock_session, mock_response
+    ):
+        """Test get_transcode_decision returns TranscodeDecision."""
+        data = {
+            "transcodeDecision": {
+                "canDirectPlay": True,
+                "canTranscode": False,
+            }
+        }
+        set_json_response(mock_response, make_response(data))
+        mock_session.post = AsyncMock(return_value=mock_response)
+
+        result = await conn.get_transcode_decision(
+            "song-123", "song", {"supportedCodecs": ["flac", "mp3"]}
+        )
+        assert isinstance(result, TranscodeDecision)
+        assert result.can_direct_play is True
+        assert result.can_transcode is False
+
+    @pytest.mark.asyncio
+    async def test_get_transcode_decision_sends_json_body(
+        self, conn, mock_session, mock_response
+    ):
+        """Test get_transcode_decision sends client_info as JSON body."""
+        data = {"transcodeDecision": {"canDirectPlay": False, "canTranscode": True}}
+        set_json_response(mock_response, make_response(data))
+        mock_session.post = AsyncMock(return_value=mock_response)
+
+        client_info = {"supportedCodecs": ["mp3"]}
+        await conn.get_transcode_decision("song-123", "song", client_info)
+
+        call_kwargs = mock_session.post.call_args[1]
+        assert call_kwargs.get("json") == client_info
+        assert "data" not in call_kwargs
+
+    @pytest.mark.asyncio
+    async def test_get_transcode_decision_with_stream_details(
+        self, conn, mock_session, mock_response
+    ):
+        """Test get_transcode_decision parses nested StreamDetails."""
+        data = {
+            "transcodeDecision": {
+                "canDirectPlay": False,
+                "canTranscode": True,
+                "transcodeParams": "abc123",
+                "sourceStream": {
+                    "protocol": "http",
+                    "container": "flac",
+                    "codec": "flac",
+                    "audioBitrate": 1000,
+                },
+                "transcodeStream": {
+                    "protocol": "http",
+                    "container": "mp3",
+                    "codec": "mp3",
+                    "audioBitrate": 320,
+                },
+            }
+        }
+        set_json_response(mock_response, make_response(data))
+        mock_session.post = AsyncMock(return_value=mock_response)
+
+        result = await conn.get_transcode_decision("song-123", "song", {})
+        assert result.transcode_params == "abc123"
+        assert result.source_stream.codec == "flac"
+        assert result.transcode_stream.audio_bitrate == 320
+
+    @pytest.mark.asyncio
+    async def test_get_transcode_stream(
+        self, conn, mock_session, mock_binary_response
+    ):
+        """Test get_transcode_stream returns binary response."""
+        mock_session.post = AsyncMock(return_value=mock_binary_response)
+
+        result = await conn.get_transcode_stream("song-123", "song", "abc123")
+        assert result is mock_binary_response
+
+
+# ============================================================================
+# REPORT PLAYBACK
+# ============================================================================
+
+class TestReportPlayback:
+    """Tests for reportPlayback."""
+
+    @pytest.mark.asyncio
+    async def test_report_playback(self, conn, mock_session, mock_response):
+        """Test report_playback returns True on success."""
+        set_json_response(mock_response, make_response({}))
+        mock_session.post = AsyncMock(return_value=mock_response)
+
+        result = await conn.report_playback(
+            "song-123", "song", 45000, "playing"
+        )
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_report_playback_sends_required_params(
+        self, conn, mock_session, mock_response
+    ):
+        """Test report_playback sends all required parameters."""
+        set_json_response(mock_response, make_response({}))
+        mock_session.post = AsyncMock(return_value=mock_response)
+
+        await conn.report_playback("song-123", "song", 45000, "paused",
+                                   playback_rate=1.5, ignore_scrobble=True)
+
+        call_kwargs = mock_session.post.call_args[1]
+        data = call_kwargs.get("data", {})
+        assert data["mediaId"] == "song-123"
+        assert data["mediaType"] == "song"
+        assert data["positionMs"] == "45000"
+        assert data["state"] == "paused"
+        assert data["playbackRate"] == "1.5"
+        assert data["ignoreScrobble"] == "true"
+
+
+# ============================================================================
+# PODCAST EPISODE
+# ============================================================================
+
+class TestGetPodcastEpisode:
+    """Tests for getPodcastEpisode."""
+
+    @pytest.mark.asyncio
+    async def test_get_podcast_episode(self, conn, mock_session, mock_response):
+        """Test get_podcast_episode returns a PodcastEpisode."""
+        data = {
+            "podcastEpisode": {
+                "id": "ep-1",
+                "channelId": "pod-1",
+                "isDir": False,
+                "title": "Episode One",
+                "status": "completed",
+            }
+        }
+        set_json_response(mock_response, make_response(data))
+        mock_session.post = AsyncMock(return_value=mock_response)
+
+        result = await conn.get_podcast_episode("ep-1")
+        assert isinstance(result, PodcastEpisode)
+        assert result.id == "ep-1"
+        assert result.title == "Episode One"
+
+
+# ============================================================================
+# TOKEN INFO
+# ============================================================================
+
+class TestTokenInfo:
+    """Tests for tokenInfo."""
+
+    @pytest.mark.asyncio
+    async def test_token_info(self, conn, mock_session, mock_response):
+        """Test token_info returns a TokenInfo."""
+        data = {"tokenInfo": {"username": "testuser"}}
+        set_json_response(mock_response, make_response(data))
+        mock_session.post = AsyncMock(return_value=mock_response)
+
+        result = await conn.token_info()
+        assert isinstance(result, TokenInfo)
+        assert result.username == "testuser"
 
 
 # Mark all async tests

@@ -37,3 +37,4 @@ except ImportError:
 from ._async.connection import AsyncConnection
 from ._sync.connection import Connection
 from . import errors
+from .extensions import Extensions

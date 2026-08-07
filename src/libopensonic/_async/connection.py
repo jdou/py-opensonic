@@ -24,13 +24,15 @@ import aiohttp
 from aiohttp import ClientResponse
 
 from .. import errors
-from ..media.media_types import (Album, AlbumID3, AlbumID3WithSongs, AlbumInfo, ArtistID3, ArtistInfo, ArtistInfo2,
-                                Artists, Bookmark, ChatMessage, Child, Directory, Error, Genre,
+from ..media.media_types import (Album, AlbumID3, AlbumID3WithSongs, AlbumInfo,
+                                ArtistInfo, ArtistInfo2, ArtistWithAlbumsID3, Artists,
+                                Bookmark, ChatMessage, Child, Directory, Error, Genre,
                                 Indexes, InternetRadioStation, JukeboxPlaylist, JukeboxStatus,
                                 Lyrics, MusicFolder, NowPlayingEntry, OpenSubsonicExtension,
-                                Playlist, PlayQueue, PodcastChannel, PodcastEpisode, ScanStatus,
-                                SearchResult2, SearchResult3, Share, Starred, Starred2,
-                                StructuredLyrics, User)
+                                Playlist, PlayQueue, PlayQueueByIndex, PodcastChannel,
+                                PodcastEpisode, ScanStatus, SearchResult2, SearchResult3,
+                                Share, SonicMatch, Starred, Starred2,
+                                StructuredLyrics, TokenInfo, TranscodeDecision, User)
 
 
 API_VERSION = '1.16.1'
@@ -859,7 +861,7 @@ class AsyncConnection:
         return [AlbumID3.from_dict(entry) for entry in dres['albumList2']['album']]
 
 
-    async def get_artist(self, artist_id:str) -> ArtistID3:
+    async def get_artist(self, artist_id:str) -> ArtistWithAlbumsID3:
         """Return the info and albums for an artist using ID3 tags.
 
         Since: 1.8.0
@@ -869,7 +871,7 @@ class AsyncConnection:
             artist_id: The artist ID.
 
         Returns:
-            A media.ArtistID3 object.
+            A media.ArtistWithAlbumsID3 object.
 
         Raises:
             errors.SonicError: On failure.
@@ -881,7 +883,7 @@ class AsyncConnection:
         res = await self._do_request(method, q)
         dres = await self._handle_info_res(res)
         self._check_status(dres)
-        return ArtistID3.from_dict(dres['artist'])
+        return ArtistWithAlbumsID3.from_dict(dres['artist'])
 
 
     async def get_artists(self) -> Artists:
@@ -1196,6 +1198,28 @@ class AsyncConnection:
         return dres
 
 
+    async def token_info(self) -> TokenInfo:
+        """Return information about the current API key.
+
+        Requires apiKey authentication (api_key parameter).
+
+        Since: OpenSubsonic 1 (apiKeyAuthentication extension)
+        Docs: https://opensubsonic.netlify.app/docs/endpoints/tokeninfo/
+
+        Returns:
+            A media.TokenInfo object.
+
+        Raises:
+            errors.SonicError: On failure.
+        """
+        method = 'tokenInfo'
+
+        res = await self._do_request(method)
+        dres = await self._handle_info_res(res)
+        self._check_status(dres)
+        return TokenInfo.from_dict(dres['tokenInfo'])
+
+
     async def get_lyrics(self, artist:str|None=None, title:str|None=None) -> Lyrics:
         """Search for and return lyrics for a given song.
 
@@ -1327,6 +1351,31 @@ class AsyncConnection:
         return [PodcastEpisode.from_dict(entry) for entry in dres['newestPodcasts']['episode']]
 
 
+    async def get_podcast_episode(self, pid:str) -> PodcastEpisode:
+        """Return info about a specific podcast episode.
+
+        Since: OpenSubsonic 1
+        Docs: https://opensubsonic.netlify.app/docs/endpoints/getpodcastepisode/
+
+        Args:
+            pid: The podcast episode ID.
+
+        Returns:
+            A media.PodcastEpisode object.
+
+        Raises:
+            errors.SonicError: On failure.
+        """
+        method = 'getPodcastEpisode'
+
+        q = self._get_query_dict({'id': pid})
+
+        res = await self._do_request(method, q)
+        dres = await self._handle_info_res(res)
+        self._check_status(dres)
+        return PodcastEpisode.from_dict(dres['podcastEpisode'])
+
+
     async def get_now_playing(self) -> list[NowPlayingEntry]:
         """Return what is currently being played by all users.
 
@@ -1444,6 +1493,26 @@ class AsyncConnection:
         dres = await self._handle_info_res(res)
         self._check_status(dres)
         return PlayQueue.from_dict(dres['playQueue'])
+
+
+    async def get_play_queue_by_index(self) -> PlayQueueByIndex:
+        """Return the saved index-based play queue state for the current user.
+
+        Since: OpenSubsonic 1 (indexBasedQueue extension)
+        Docs: https://opensubsonic.netlify.app/docs/endpoints/getplayqueuebyindex/
+
+        Returns:
+            A media.PlayQueueByIndex object.
+
+        Raises:
+            errors.SonicError: On failure.
+        """
+        method = 'getPlayQueueByIndex'
+
+        res = await self._do_request(method)
+        dres = await self._handle_info_res(res)
+        self._check_status(dres)
+        return PlayQueueByIndex.from_dict(dres['playQueueByIndex'])
 
 
     async def get_podcasts(self, inc_episodes:bool=True, pid:str|None=None) -> list[PodcastChannel]:
@@ -1613,6 +1682,73 @@ class AsyncConnection:
         if 'song' not in dres['similarSongs2'] or not dres['similarSongs2']['song']:
             return []
         return [Child.from_dict(entry) for entry in dres['similarSongs2']['song']]
+
+
+    async def get_sonic_similar_tracks(self, song_id:str, count:int=10) -> list[SonicMatch]:
+        """Return tracks with similar audio characteristics to a given song.
+
+        Results are ordered from most to least similar. A similarity of 1.0
+        means the exact same song; 0.0 means the most different. The server
+        returns -1 if similarity is not available.
+
+        Since: OpenSubsonic 1
+        Docs: https://opensubsonic.netlify.app/docs/endpoints/getsonicsimilartracks/
+
+        Args:
+            song_id: The ID of the reference song.
+            count: Maximum number of results to return. Default 10.
+
+        Returns:
+            A list of media.SonicMatch objects.
+
+        Raises:
+            errors.SonicError: On failure.
+        """
+        method = 'getSonicSimilarTracks'
+
+        q = self._get_query_dict({'id': song_id, 'count': count})
+
+        res = await self._do_request(method, q)
+        dres = await self._handle_info_res(res)
+        self._check_status(dres)
+        if 'sonicMatch' not in dres or not dres['sonicMatch']:
+            return []
+        return [SonicMatch.from_dict(entry) for entry in dres['sonicMatch']]
+
+
+    async def find_sonic_path(self, start_song_id:str, end_song_id:str,
+                              count:int=25) -> list[SonicMatch]:
+        """Find a path of songs connecting a start song to an end song.
+
+        The returned path always begins with start_song_id and ends with
+        end_song_id. Each element carries a similarity score relative to the
+        preceding song.
+
+        Since: OpenSubsonic 1
+        Docs: https://opensubsonic.netlify.app/docs/endpoints/findsonicpath/
+
+        Args:
+            start_song_id: The ID of the starting song.
+            end_song_id: The ID of the destination song.
+            count: Maximum number of songs in the path. Default 25.
+
+        Returns:
+            A list of media.SonicMatch objects.
+
+        Raises:
+            errors.SonicError: On failure.
+        """
+        method = 'findSonicPath'
+
+        q = self._get_query_dict({'startSongId': start_song_id,
+            'endSongId': end_song_id, 'count': count})
+
+        res = await self._do_request(method, q)
+        dres = await self._handle_info_res(res)
+        self._check_status(dres)
+        if 'sonicMatch' not in dres or not dres['sonicMatch']:
+            return []
+        return [SonicMatch.from_dict(entry) for entry in dres['sonicMatch']]
 
 
     async def get_song(self, sid:str) -> Child:
@@ -1852,6 +1988,84 @@ class AsyncConnection:
         return dres
 
 
+    async def get_transcode_decision(self, media_id:str, media_type:str,
+                                     client_info:dict) -> TranscodeDecision:
+        """Determine whether a media file requires transcoding.
+
+        Sends a JSON ClientInfo body describing the client's playback
+        capabilities (supported codecs, profiles, bitrate limits, etc.).
+        Auth parameters are passed as query string parameters; client_info
+        is sent as the JSON request body.
+
+        Since: OpenSubsonic 1
+        Docs: https://opensubsonic.netlify.app/docs/endpoints/gettranscodedecision/
+
+        Args:
+            media_id: The ID of the media to evaluate.
+            media_type: Whether the ID refers to a "song" or "podcast".
+            client_info: Dict describing the client's playback capabilities.
+                See the spec for the ClientInfo schema.
+
+        Returns:
+            A media.TranscodeDecision object.
+
+        Raises:
+            errors.SonicError: On failure.
+        """
+        method = 'getTranscodeDecision'
+        if self._use_views:
+            method += '.view'
+        url = f"{self._base_url}:{self._port}/{self._server_path}/{method}"
+
+        qdict = self._stringify_qdict(self._get_base_qdict())
+        qdict['mediaId'] = media_id
+        qdict['mediaType'] = media_type
+
+        if not self._sess:
+            self._sess = aiohttp.ClientSession()
+
+        res = await self._sess.post(url, params=qdict, json=client_info,
+                                    timeout=self._timeout)
+        dres = await self._handle_info_res(res)
+        self._check_status(dres)
+        return TranscodeDecision.from_dict(dres['transcodeDecision'])
+
+
+    async def get_transcode_stream(self, media_id:str, media_type:str,
+                                   transcode_params:str, offset:int=0) -> ClientResponse:
+        """Return a transcoded media stream.
+
+        Use the transcodeParams value returned by get_transcode_decision().
+        Do not attempt to construct transcodeParams manually.
+
+        Since: OpenSubsonic 1
+        Docs: https://opensubsonic.netlify.app/docs/endpoints/gettranscodestream/
+
+        Args:
+            media_id: The ID of the media to transcode.
+            media_type: Whether the ID refers to a "song" or "podcast".
+            transcode_params: The transcodeParams value from
+                get_transcode_decision().
+            offset: Starting offset in seconds. Default 0.
+
+        Returns:
+            The response object for reading the transcoded stream.
+
+        Raises:
+            errors.SonicError: On failure.
+        """
+        method = 'getTranscodeStream'
+
+        q = self._get_query_dict({'mediaId': media_id, 'mediaType': media_type,
+            'transcodeParams': transcode_params, 'offset': offset})
+
+        res = await self._do_request(method, q)
+        dres = await self._handle_bin_res(res)
+        if isinstance(dres, dict):
+            self._check_status(dres)
+        return dres
+
+
     async def hls (self, mid, bitrate=None):
         """Create an HTTP live streaming playlist for a media file.
 
@@ -1985,6 +2199,43 @@ class AsyncConnection:
         return True
 
 
+    async def report_playback(self, media_id:str, media_type:str, position_ms:int,
+                              state:str, playback_rate:float=1.0,
+                              ignore_scrobble:bool=False) -> bool:
+        """Report playback timeline state for a song or podcast episode.
+
+        Clients should send updates on each state change at minimum. Valid
+        state values are "starting", "playing", "paused", and "stopped".
+
+        Since: OpenSubsonic 1 (playbackReport extension)
+        Docs: https://opensubsonic.netlify.app/docs/endpoints/reportplayback/
+
+        Args:
+            media_id: The ID of the media being played.
+            media_type: Whether the ID refers to a "song" or "podcast".
+            position_ms: Current playback position in milliseconds.
+            state: One of "starting", "playing", "paused", or "stopped".
+            playback_rate: Playback speed multiplier. Default 1.0.
+            ignore_scrobble: If True, suppress scrobble/playcount side effects.
+
+        Returns:
+            True on success.
+
+        Raises:
+            errors.SonicError: On failure.
+        """
+        method = 'reportPlayback'
+
+        q = self._get_query_dict({'mediaId': media_id, 'mediaType': media_type,
+            'positionMs': position_ms, 'state': state,
+            'playbackRate': playback_rate, 'ignoreScrobble': ignore_scrobble})
+
+        res = await self._do_request(method, q)
+        dres = await self._handle_info_res(res)
+        self._check_status(dres)
+        return True
+
+
     async def save_play_queue(self, qids, current=None, position=None) -> bool:
         """Save the state of the play queue for the current user.
 
@@ -2014,6 +2265,43 @@ class AsyncConnection:
         q = self._get_query_dict({'current': current, 'position': position})
 
         res = await self._do_request_with_lists(method, {'id': qids}, q)
+        dres = await self._handle_info_res(res)
+        self._check_status(dres)
+        return True
+
+
+    async def save_play_queue_by_index(self, ids:list[str]|None=None,
+                                       current_index:int|None=None,
+                                       position:int|None=None) -> bool:
+        """Save the play queue using index-based track identification.
+
+        Supports queues with duplicate songs. Call with no arguments to clear
+        the saved queue. When ids is provided, current_index must be a valid
+        0-based index into the list.
+
+        Since: OpenSubsonic 1 (indexBasedQueue extension)
+        Docs: https://opensubsonic.netlify.app/docs/endpoints/saveplayqueuebyindex/
+
+        Args:
+            ids: Song IDs in the queue, in order.
+            current_index: 0-based index of the currently playing track.
+                Required when ids is provided.
+            position: Current playback position in milliseconds.
+
+        Returns:
+            True on success.
+
+        Raises:
+            errors.SonicError: On failure.
+        """
+        method = 'savePlayQueueByIndex'
+
+        if ids:
+            q = self._get_query_dict({'currentIndex': current_index,
+                'position': position})
+            res = await self._do_request_with_list(method, 'id', ids, q)
+        else:
+            res = await self._do_request(method)
         dres = await self._handle_info_res(res)
         self._check_status(dres)
         return True
